@@ -21,9 +21,12 @@
           
           meta = with pkgs.lib; {
             description = "Charon Key Go application";
-            homepage = "https://github.com/your-username/charon-key";
-            license = licenses.mit; # Adjust as needed
-            maintainers = [ ];
+            homepage = "https://github.com/gdr/charon-key";
+            license = licenses.mit;
+            maintainers = [ {
+              name = "Damir Garifullin";
+              github = "gdr";
+            } ];
           };
         };
       };
