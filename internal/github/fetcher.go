@@ -26,6 +26,11 @@ type Fetcher struct {
 	baseURL string
 }
 
+// SetBaseURL sets the base URL for the fetcher (useful for testing)
+func (f *Fetcher) SetBaseURL(url string) {
+	f.baseURL = url
+}
+
 // NewFetcher creates a new GitHub fetcher with default settings
 func NewFetcher() *Fetcher {
 	return &Fetcher{
