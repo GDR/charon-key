@@ -4,6 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
+
+	"github.com/dgarifullin/charon-key/internal/config"
 )
 
 var (
@@ -15,11 +18,19 @@ var (
 func main() {
 	var showVersion bool
 	var showHelp bool
+	var userMapStr string
+	var cacheDir string
+	var cacheTTLMinutes int
+	var logLevel string
 
 	flag.BoolVar(&showVersion, "version", false, "Show version information")
 	flag.BoolVar(&showVersion, "v", false, "Show version information (shorthand)")
 	flag.BoolVar(&showHelp, "help", false, "Show help information")
 	flag.BoolVar(&showHelp, "h", false, "Show help information (shorthand)")
+	flag.StringVar(&userMapStr, "user-map", "", "User mapping (required): sshuser1:githubuser1,sshuser1:githubuser2")
+	flag.StringVar(&cacheDir, "cache-dir", "", "Cache directory (optional, default: OS temp)")
+	flag.IntVar(&cacheTTLMinutes, "cache-ttl", 5, "Cache TTL in minutes (optional, default: 5)")
+	flag.StringVar(&logLevel, "log-level", "info", "Log level: debug|info|warn|error (optional, default: info)")
 
 	flag.Parse()
 
@@ -35,10 +46,62 @@ func main() {
 		os.Exit(0)
 	}
 
-	// For now, just print a message that the application is not yet implemented
-	fmt.Fprintf(os.Stderr, "charon-key: AuthorizedKeysCommand for GitHub SSH keys\n")
-	fmt.Fprintf(os.Stderr, "Use --help for usage information\n")
-	os.Exit(1)
+	// Parse configuration
+	cfg, err := parseConfig(userMapStr, cacheDir, cacheTTLMinutes, logLevel)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Use --help for usage information\n")
+		os.Exit(1)
+	}
+
+	// Get SSH username from positional arguments (passed by SSH daemon)
+	args := flag.Args()
+	if len(args) > 0 {
+		cfg.SSHUsername = args[0]
+	}
+
+	// For now, just validate and print config (implementation continues in next milestones)
+	fmt.Fprintf(os.Stderr, "Configuration loaded successfully\n")
+	fmt.Fprintf(os.Stderr, "SSH Username: %s\n", cfg.SSHUsername)
+	fmt.Fprintf(os.Stderr, "User Map: %v\n", cfg.UserMap)
+	fmt.Fprintf(os.Stderr, "Cache Dir: %s\n", cfg.CacheDir)
+	fmt.Fprintf(os.Stderr, "Cache TTL: %v\n", cfg.CacheTTL)
+	fmt.Fprintf(os.Stderr, "Log Level: %s\n", cfg.LogLevel)
+
+	// TODO: Implement key resolution in Milestone 5
+	os.Exit(0)
+}
+
+func parseConfig(userMapStr, cacheDir string, cacheTTLMinutes int, logLevel string) (*config.Config, error) {
+	// Validate required user-map
+	if userMapStr == "" {
+		return nil, fmt.Errorf("--user-map is required")
+	}
+
+	// Parse user mapping
+	userMap, err := config.ParseUserMap(userMapStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse user-map: %w", err)
+	}
+
+	// Validate log level
+	if err := config.ValidateLogLevel(logLevel); err != nil {
+		return nil, fmt.Errorf("invalid log level: %w", err)
+	}
+
+	// Validate cache TTL
+	if cacheTTLMinutes < 1 {
+		return nil, fmt.Errorf("cache-ttl must be at least 1 minute, got %d", cacheTTLMinutes)
+	}
+
+	cfg := &config.Config{
+		UserMap:  userMap,
+		CacheDir: cacheDir, // Empty means use OS temp (handled in cache package)
+		CacheTTL: time.Duration(cacheTTLMinutes) * time.Minute,
+		LogLevel: logLevel,
+	}
+
+	return cfg, nil
 }
 
 func printHelp() {
