@@ -210,7 +210,7 @@ $RECYCLE.BIN/
 .direnv
 llm_docs/
 
-result/
+result
 
 bin/
 

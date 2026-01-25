@@ -15,7 +15,7 @@
 
         charon-key = pkgs.buildGoModule {
           pname = "charon-key";
-          version = "dev";
+          version = "1.0.1";
           # Use self to include all git-tracked files
           src = self;
 
@@ -28,7 +28,7 @@
 
           # Build flags for version information
           ldflags = [
-            "-X main.version=dev"
+            "-X main.version=1.0.1"
             "-X main.commit=${self.rev or "unknown"}"
             "-X main.date=${self.lastModifiedDate or "unknown"}"
           ];
