@@ -212,4 +212,6 @@ llm_docs/
 
 result/
 
+bin/
+
 # End of https://www.toptal.com/developers/gitignore/api/windows,linux,macos,go,goland+all,vim
