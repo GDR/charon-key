@@ -1,5 +1,5 @@
 {
-  description = "Golang development environment";
+  description = "SSH AuthorizedKeysCommand for GitHub SSH keys";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -12,8 +12,38 @@
         pkgs = import nixpkgs {
           inherit system;
         };
+
+        charon-key = pkgs.buildGoModule {
+          pname = "charon-key";
+          version = "dev";
+          # Use self to include all git-tracked files
+          src = self;
+
+          # The subpackage to build
+          subPackages = [ "cmd/charon-key" ];
+
+          # No dependencies yet, so vendorHash is null
+          # When dependencies are added, this will be automatically calculated
+          vendorHash = null;
+
+          # Build flags for version information
+          ldflags = [
+            "-X main.version=dev"
+            "-X main.commit=${self.rev or "unknown"}"
+            "-X main.date=${self.lastModifiedDate or "unknown"}"
+          ];
+
+          meta = with pkgs.lib; {
+            description = "SSH AuthorizedKeysCommand that fetches SSH public keys from GitHub";
+            homepage = "https://github.com/gdr/charon-key";
+            license = licenses.mit;
+            maintainers = [ ];
+            platforms = platforms.unix;
+          };
+        };
       in
       {
+        # Development shell
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
             # Go compiler and tools
@@ -44,6 +74,10 @@
             echo "  - gofumpt: Go formatter"
             echo "  - golangci-lint: Go linter"
             echo ""
+            echo "Build commands:"
+            echo "  nix build          - Build the application"
+            echo "  nix run            - Run the application"
+            echo ""
             
             # Set up Go environment
             export GOPATH="$HOME/go"
@@ -52,6 +86,14 @@
             # Enable Go modules if not already set
             export GO111MODULE=on
           '';
+        };
+
+        # Package output
+        packages.default = charon-key;
+
+        # App output (for nix run)
+        apps.default = flake-utils.lib.mkApp {
+          drv = charon-key;
         };
       }
     );
