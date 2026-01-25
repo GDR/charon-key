@@ -89,10 +89,26 @@ func main() {
 	resolver := resolver.NewResolver(cfg, fetcher, cacheManager, log)
 
 	// Resolve keys
-	githubKeys, err := resolver.ResolveKeysForSSHUser()
-	if err != nil {
-		log.Error("failed to resolve keys", "error", err)
+	var githubKeys []string
+	var resolveErr error
+
+	if cfg.SSHUsername != "" {
+		// Resolve for specific SSH user
+		githubKeys, resolveErr = resolver.ResolveKeysForSSHUser()
+	} else {
+		// Try to resolve with empty username (will use wildcard if available)
+		githubKeys, resolveErr = resolver.ResolveKeys("")
+	}
+
+	if resolveErr != nil {
+		log.Error("failed to resolve keys", "error", resolveErr, "ssh_username", cfg.SSHUsername)
 		errors.ExitWithCode(errors.ExitNetworkError)
+	}
+
+	if len(githubKeys) == 0 {
+		log.Warn("no keys resolved", "ssh_username", cfg.SSHUsername)
+		// Still exit successfully with empty output (SSH will deny access)
+		errors.ExitWithCode(errors.ExitSuccess)
 	}
 
 	// Validate keys (fail secure on invalid keys)

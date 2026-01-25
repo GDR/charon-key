@@ -99,7 +99,19 @@ func TestResolver_ResolveKeys(t *testing.T) {
 			errorContains: "no GitHub users mapped",
 		},
 		{
-			name:        "empty SSH username",
+			name:        "empty SSH username with wildcard",
+			sshUsername: "",
+			userMap: map[string][]string{
+				"*": {"wildcard-github"},
+			},
+			githubResp: map[string]string{
+				"wildcard-github": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAAB wildcard@example.com\n",
+			},
+			wantKeys:  1,
+			wantError: false,
+		},
+		{
+			name:        "empty SSH username without wildcard",
 			sshUsername: "",
 			userMap: map[string][]string{
 				"alice": {"alice-github"},
@@ -107,7 +119,7 @@ func TestResolver_ResolveKeys(t *testing.T) {
 			githubResp: map[string]string{},
 			wantKeys:   0,
 			wantError:  true,
-			errorContains: "cannot be empty",
+			errorContains: "no GitHub users mapped",
 		},
 	}
 

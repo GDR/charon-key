@@ -29,10 +29,10 @@ func NewResolver(cfg *config.Config, fetcher *github.Fetcher, cacheManager *cach
 
 // ResolveKeys resolves SSH keys for the given SSH username
 // Returns all authorized keys (merged from all GitHub users)
+// If sshUsername is empty, will try to use wildcard mapping if available
 func (r *Resolver) ResolveKeys(sshUsername string) ([]string, error) {
-	if sshUsername == "" {
-		return nil, fmt.Errorf("SSH username cannot be empty")
-	}
+	// Empty username is allowed if wildcard mapping exists
+	// We'll check for wildcard in GetGitHubUsers
 
 	r.logger.Debug("resolving keys", "ssh_username", sshUsername)
 
