@@ -4,9 +4,16 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/dgarifullin/charon-key/internal/cache"
 	"github.com/dgarifullin/charon-key/internal/config"
+	"github.com/dgarifullin/charon-key/internal/errors"
+	"github.com/dgarifullin/charon-key/internal/github"
+	"github.com/dgarifullin/charon-key/internal/logger"
+	"github.com/dgarifullin/charon-key/internal/resolver"
+	"github.com/dgarifullin/charon-key/internal/ssh"
 )
 
 var (
@@ -46,12 +53,14 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Initialize logger first (for error logging)
+	log := logger.NewLogger(logLevel)
+
 	// Parse configuration
 	cfg, err := parseConfig(userMapStr, cacheDir, cacheTTLMinutes, logLevel)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Use --help for usage information\n")
-		os.Exit(1)
+		log.Error("configuration error", "error", err)
+		errors.ExitWithCode(errors.ExitConfigError)
 	}
 
 	// Get SSH username from positional arguments (passed by SSH daemon)
@@ -60,16 +69,90 @@ func main() {
 		cfg.SSHUsername = args[0]
 	}
 
-	// For now, just validate and print config (implementation continues in next milestones)
-	fmt.Fprintf(os.Stderr, "Configuration loaded successfully\n")
-	fmt.Fprintf(os.Stderr, "SSH Username: %s\n", cfg.SSHUsername)
-	fmt.Fprintf(os.Stderr, "User Map: %v\n", cfg.UserMap)
-	fmt.Fprintf(os.Stderr, "Cache Dir: %s\n", cfg.CacheDir)
-	fmt.Fprintf(os.Stderr, "Cache TTL: %v\n", cfg.CacheTTL)
-	fmt.Fprintf(os.Stderr, "Log Level: %s\n", cfg.LogLevel)
+	// Log startup configuration
+	log.Info("starting charon-key", "version", version, "ssh_username", cfg.SSHUsername)
+	log.Debug("configuration", "user_map", cfg.UserMap, "cache_dir", cfg.CacheDir, "cache_ttl", cfg.CacheTTL, "log_level", cfg.LogLevel)
 
-	// TODO: Implement key resolution in Milestone 5
-	os.Exit(0)
+	// Initialize cache manager
+	cacheManager, err := cache.NewManager(cfg.CacheDir, cfg.CacheTTL)
+	if err != nil {
+		log.Error("failed to initialize cache", "error", err)
+		errors.ExitWithCode(errors.ExitGeneralError)
+	}
+	log.Debug("cache initialized", "cache_dir", cacheManager.GetCacheDir())
+
+	// Initialize GitHub fetcher
+	fetcher := github.NewFetcher()
+	fetcher.SetLogger(log)
+
+	// Initialize resolver
+	resolver := resolver.NewResolver(cfg, fetcher, cacheManager, log)
+
+	// Resolve keys
+	githubKeys, err := resolver.ResolveKeysForSSHUser()
+	if err != nil {
+		log.Error("failed to resolve keys", "error", err)
+		errors.ExitWithCode(errors.ExitNetworkError)
+	}
+
+	// Validate keys (fail secure on invalid keys)
+	for _, key := range githubKeys {
+		if !isValidKeyFormat(key) {
+			log.Error("invalid key format detected", "key", key)
+			errors.HandleInvalidKey(key, fmt.Errorf("key does not match valid SSH key format"))
+		}
+	}
+
+	// Initialize SSH manager
+	sshManager, err := ssh.NewManager(cfg.SSHUsername)
+	if err != nil {
+		log.Warn("failed to initialize SSH manager, using current user", "error", err)
+		sshManager, err = ssh.NewManager("")
+		if err != nil {
+			log.Error("failed to initialize SSH manager with current user", "error", err)
+			errors.ExitWithCode(errors.ExitPermissionError)
+		}
+	}
+
+	// Get all keys (merge with existing authorized_keys)
+	output, err := sshManager.GetAllKeys(githubKeys)
+	if err != nil {
+		log.Warn("failed to read existing authorized_keys, using GitHub keys only", "error", err)
+		// Still output GitHub keys even if we can't read existing file
+		output = ssh.FormatKeys(githubKeys)
+	}
+
+	// Output to stdout (SSH daemon reads from here)
+	fmt.Print(output)
+
+	log.Debug("completed successfully", "total_keys", len(githubKeys))
+	errors.ExitWithCode(errors.ExitSuccess)
+}
+
+// isValidKeyFormat performs basic validation of SSH key format
+// This is a duplicate from github package but needed here for validation
+func isValidKeyFormat(key string) bool {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return false
+	}
+
+	validPrefixes := []string{
+		"ssh-rsa",
+		"ssh-ed25519",
+		"ecdsa-sha2-nistp256",
+		"ecdsa-sha2-nistp384",
+		"ecdsa-sha2-nistp521",
+		"ssh-dss",
+	}
+
+	for _, prefix := range validPrefixes {
+		if strings.HasPrefix(key, prefix) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func parseConfig(userMapStr, cacheDir string, cacheTTLMinutes int, logLevel string) (*config.Config, error) {

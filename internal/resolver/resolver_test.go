@@ -10,6 +10,7 @@ import (
 	"github.com/dgarifullin/charon-key/internal/cache"
 	"github.com/dgarifullin/charon-key/internal/config"
 	"github.com/dgarifullin/charon-key/internal/github"
+	"github.com/dgarifullin/charon-key/internal/logger"
 )
 
 func TestNewResolver(t *testing.T) {
@@ -24,7 +25,8 @@ func TestNewResolver(t *testing.T) {
 	defer cacheManager.Clear("alice-github")
 
 	fetcher := github.NewFetcher()
-	resolver := NewResolver(cfg, fetcher, cacheManager)
+	log := logger.NewLogger("debug")
+	resolver := NewResolver(cfg, fetcher, cacheManager, log)
 
 	if resolver == nil {
 		t.Fatal("NewResolver() returned nil")
@@ -143,7 +145,8 @@ func TestResolver_ResolveKeys(t *testing.T) {
 			fetcher := github.NewFetcher()
 			fetcher.SetBaseURL(server.URL)
 
-			resolver := NewResolver(cfg, fetcher, cacheManager)
+			log := logger.NewLogger("debug")
+			resolver := NewResolver(cfg, fetcher, cacheManager, log)
 
 			keys, err := resolver.ResolveKeys(tt.sshUsername)
 
@@ -188,7 +191,8 @@ func TestResolver_CacheUsage(t *testing.T) {
 	fetcher := github.NewFetcher()
 	fetcher.SetBaseURL(server.URL)
 
-	resolver := NewResolver(cfg, fetcher, cacheManager)
+	log := logger.NewLogger("debug")
+	resolver := NewResolver(cfg, fetcher, cacheManager, log)
 
 	// First call - should fetch from GitHub and cache
 	keys1, err := resolver.ResolveKeys("alice")
@@ -240,7 +244,8 @@ func TestResolver_OfflineMode(t *testing.T) {
 	fetcher := github.NewFetcher()
 	fetcher.SetBaseURL(server.URL)
 
-	resolver := NewResolver(cfg, fetcher, cacheManager)
+	log := logger.NewLogger("debug")
+	resolver := NewResolver(cfg, fetcher, cacheManager, log)
 
 	// Should use expired cache when GitHub fails
 	keys, err := resolver.ResolveKeys("alice")
@@ -279,7 +284,8 @@ func TestResolver_Deduplication(t *testing.T) {
 	fetcher := github.NewFetcher()
 	fetcher.SetBaseURL(server.URL)
 
-	resolver := NewResolver(cfg, fetcher, cacheManager)
+	log := logger.NewLogger("debug")
+	resolver := NewResolver(cfg, fetcher, cacheManager, log)
 
 	keys, err := resolver.ResolveKeys("alice")
 	if err != nil {

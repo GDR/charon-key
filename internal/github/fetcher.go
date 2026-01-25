@@ -24,6 +24,22 @@ const (
 type Fetcher struct {
 	client  *http.Client
 	baseURL string
+	logger  interface {
+		Debug(msg string, args ...any)
+		Info(msg string, args ...any)
+		Warn(msg string, args ...any)
+		Error(msg string, args ...any)
+	}
+}
+
+// SetLogger sets the logger for the fetcher
+func (f *Fetcher) SetLogger(logger interface {
+	Debug(msg string, args ...any)
+	Info(msg string, args ...any)
+	Warn(msg string, args ...any)
+	Error(msg string, args ...any)
+}) {
+	f.logger = logger
 }
 
 // SetBaseURL sets the base URL for the fetcher (useful for testing)
@@ -66,31 +82,53 @@ func (f *Fetcher) FetchKeys(username string) ([]string, error) {
 	// Retry logic for transient failures
 	for attempt := 0; attempt <= MaxRetries; attempt++ {
 		if attempt > 0 {
+			if f.logger != nil {
+				f.logger.Debug("retrying GitHub fetch", "username", username, "attempt", attempt)
+			}
 			time.Sleep(RetryDelay * time.Duration(attempt))
 		}
 
 		keys, lastErr = f.fetchKeysOnce(url)
 		if lastErr == nil {
+			if f.logger != nil {
+				f.logger.Debug("successfully fetched keys", "username", username, "keys_count", len(keys))
+			}
 			return keys, nil
 		}
 
 		// Don't retry on 404 (user not found) or other client errors
 		if httpErr, ok := lastErr.(*HTTPError); ok {
 			if httpErr.StatusCode == http.StatusNotFound {
+				if f.logger != nil {
+					f.logger.Warn("GitHub user not found", "username", username)
+				}
 				return nil, fmt.Errorf("GitHub user %q not found", username)
 			}
 			// Retry on 5xx errors (server errors)
 			if httpErr.StatusCode >= 500 && attempt < MaxRetries {
+				if f.logger != nil {
+					f.logger.Warn("GitHub server error, retrying", "username", username, "status_code", httpErr.StatusCode, "attempt", attempt)
+				}
 				continue
 			}
 			// Don't retry on 4xx errors (client errors)
+			if f.logger != nil {
+				f.logger.Error("GitHub client error", "username", username, "status_code", httpErr.StatusCode, "error", lastErr)
+			}
 			return nil, lastErr
 		}
 
 		// Retry on network errors/timeouts if we have retries left
 		if attempt < MaxRetries {
+			if f.logger != nil {
+				f.logger.Warn("network error, retrying", "username", username, "error", lastErr, "attempt", attempt)
+			}
 			continue
 		}
+	}
+
+	if f.logger != nil {
+		f.logger.Error("failed to fetch keys after retries", "username", username, "attempts", MaxRetries+1, "error", lastErr)
 	}
 
 	return nil, fmt.Errorf("failed to fetch keys after %d attempts: %w", MaxRetries+1, lastErr)
@@ -134,6 +172,7 @@ func (f *Fetcher) fetchKeysOnce(url string) ([]string, error) {
 func parseKeys(body io.Reader) ([]string, error) {
 	var keys []string
 	scanner := bufio.NewScanner(body)
+	invalidCount := 0
 
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -144,6 +183,7 @@ func parseKeys(body io.Reader) ([]string, error) {
 
 		// Basic validation: check if line looks like an SSH key
 		if !isValidKeyFormat(line) {
+			invalidCount++
 			continue // Skip invalid lines (comments, etc.)
 		}
 
@@ -152,6 +192,12 @@ func parseKeys(body io.Reader) ([]string, error) {
 
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	// If we got keys but also invalid lines, that's okay (just skip them)
+	// But if we got NO keys and there were lines, that might indicate a problem
+	if len(keys) == 0 && invalidCount > 0 {
+		return nil, fmt.Errorf("no valid SSH keys found in response (%d invalid lines)", invalidCount)
 	}
 
 	return keys, nil
