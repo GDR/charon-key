@@ -210,4 +210,6 @@ $RECYCLE.BIN/
 .direnv
 llm_docs/
 
+result/
+
 # End of https://www.toptal.com/developers/gitignore/api/windows,linux,macos,go,goland+all,vim
