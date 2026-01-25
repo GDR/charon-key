@@ -1,11 +1,17 @@
-name: Go Cross-Compile
+name: Build and Release
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
-
+    inputs:
+      version:
+        description: 'Version tag (e.g., v1.0.0)'
+        required: true
+        type: string
+      create_release:
+        description: 'Create GitHub release?'
+        required: false
+        type: boolean
+        default: true
 
 jobs:
   build:
@@ -22,32 +28,61 @@ jobs:
       - name: Run tests
         run: go test ./...
 
+      - name: Set version info
+        id: version
+        run: |
+          VERSION="${{ inputs.version }}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
       - name: Cross-compile for Linux x86-64
         run: |
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-X main.version=${GITHUB_REF#refs/tags/} -X main.commit=${GITHUB_SHA} -X main.date=$(date -u +%Y%m%d%H%M%S)" -o charon-key-linux-amd64 ./cmd/charon-key
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+            -ldflags "-X main.version=${{ steps.version.outputs.version }} -X main.commit=${GITHUB_SHA} -X main.date=$(date -u +%Y%m%d%H%M%S)" \
+            -o charon-key-linux-amd64 ./cmd/charon-key
 
       - name: Cross-compile for Linux ARM64
         run: |
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "-X main.version=${GITHUB_REF#refs/tags/} -X main.commit=${GITHUB_SHA} -X main.date=$(date -u +%Y%m%d%H%M%S)" -o charon-key-linux-arm64 ./cmd/charon-key
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
+            -ldflags "-X main.version=${{ steps.version.outputs.version }} -X main.commit=${GITHUB_SHA} -X main.date=$(date -u +%Y%m%d%H%M%S)" \
+            -o charon-key-linux-arm64 ./cmd/charon-key
 
       - name: Cross-compile for macOS x86-64 (Intel)
         run: |
-          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "-X main.version=${GITHUB_REF#refs/tags/} -X main.commit=${GITHUB_SHA} -X main.date=$(date -u +%Y%m%d%H%M%S)" -o charon-key-darwin-amd64 ./cmd/charon-key
+          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build \
+            -ldflags "-X main.version=${{ steps.version.outputs.version }} -X main.commit=${GITHUB_SHA} -X main.date=$(date -u +%Y%m%d%H%M%S)" \
+            -o charon-key-darwin-amd64 ./cmd/charon-key
 
       - name: Cross-compile for macOS ARM64 (Apple Silicon)
         run: |
-          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "-X main.version=${GITHUB_REF#refs/tags/} -X main.commit=${GITHUB_SHA} -X main.date=$(date -u +%Y%m%d%H%M%S)" -o charon-key-darwin-arm64 ./cmd/charon-key
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build \
+            -ldflags "-X main.version=${{ steps.version.outputs.version }} -X main.commit=${GITHUB_SHA} -X main.date=$(date -u +%Y%m%d%H%M%S)" \
+            -o charon-key-darwin-arm64 ./cmd/charon-key
 
       - name: Create checksums
         run: |
           sha256sum charon-key-* > checksums.txt
           cat checksums.txt
 
-      - name: Upload release assets
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ steps.version.outputs.version }}
+          path: |
+            charon-key-*
+            checksums.txt
+          retention-days: 30
+
+      - name: Create GitHub Release
+        if: inputs.create_release == true
         uses: softprops/action-gh-release@v1
         with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: Release ${{ steps.version.outputs.version }}
           files: |
             charon-key-*
             checksums.txt
+          draft: true
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
