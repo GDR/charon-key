@@ -26,7 +26,7 @@ in
 
   config = lib.mkIf cfg.enable (
     let
-      charon-key = self.packages.${pkgs.system}.default;
+      charon-key = self.packages.${pkgs.stdenv.hostPlatform.system}.default;
 
       userMapStr = lib.concatStringsSep "," (
         lib.concatLists (lib.mapAttrsToList (sshUser: githubUsers:

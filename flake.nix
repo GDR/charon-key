@@ -103,6 +103,9 @@
     {
       # NixOS module for declarative charon-key configuration
       nixosModules.default = import ./module.nix self;
+
+      # nix-darwin module for macOS
+      darwinModules.default = import ./darwin-module.nix self;
     };
 }
 
