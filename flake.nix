@@ -7,7 +7,7 @@
   };
 
   outputs = { self, nixpkgs, flake-utils }:
-    flake-utils.lib.eachDefaultSystem (system:
+    (flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs {
           inherit system;
@@ -96,6 +96,11 @@
           drv = charon-key;
         };
       }
-    );
+    ))
+    //
+    {
+      # NixOS module for declarative charon-key configuration
+      nixosModules.default = import ./module.nix self;
+    };
 }
 
