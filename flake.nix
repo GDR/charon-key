@@ -13,16 +13,16 @@
           inherit system;
         };
 
-        pkgVersion = "1.0.3";
+        pkgVersion = "1.0.4";
 
         # Pre-built binaries from GitHub releases.
         # To update: bump pkgVersion and replace the hashes from checksums.txt
         # (convert with: nix-hash --type sha256 --to-sri <hex>)
         assets = {
-          x86_64-linux   = { name = "charon-key-linux-amd64";  hash = "sha256-PULQBszqwWVeIxOlhFnrx+4m6dQo5bBJ8Q0kDNVe0Bc="; };
-          aarch64-linux  = { name = "charon-key-linux-arm64";  hash = "sha256-RfATM4oclHgy5D7VHdHFpOl4CM4hzevZqWhoAzsMp+E="; };
-          x86_64-darwin  = { name = "charon-key-darwin-amd64"; hash = "sha256-H3W2Qd2kI387Qe/5rExVbHxGZy1s7fUIpfBtM57li18="; };
-          aarch64-darwin = { name = "charon-key-darwin-arm64"; hash = "sha256-eR29xLewSuQkuZ88DIwlwgwUZWZ3zPSGggJxaH8Koy4="; };
+          x86_64-linux   = { name = "charon-key-linux-amd64";  hash = "sha256-cegmLO1ZLgd0sYYwaceDtTTiC8seBcavwjuGZsrT6aA="; };
+          aarch64-linux  = { name = "charon-key-linux-arm64";  hash = "sha256-UzOz3d11ZrCNBv2zzdzfKuexERsi8QP3sDX4bGwQw/g="; };
+          x86_64-darwin  = { name = "charon-key-darwin-amd64"; hash = "sha256-3JgFxRynqID5qx6dQ7h1SotkYJVOxRq86JXRz6+n1sY="; };
+          aarch64-darwin = { name = "charon-key-darwin-arm64"; hash = "sha256-U+pdVwgH5MWDon/3ulZ4mqxZasuq8NwnSuKo60sCa+k="; };
         };
         asset = assets.${system} or (throw "charon-key: unsupported system ${system}");
 
