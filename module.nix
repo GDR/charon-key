@@ -3,13 +3,6 @@ self:
 
 let
   cfg = config.services.charon-key;
-  charon-key = self.packages.${pkgs.system}.default;
-
-  userMapStr = lib.concatStringsSep "," (
-    lib.concatLists (lib.mapAttrsToList (sshUser: githubUsers:
-      map (ghUser: "${sshUser}:${ghUser}") githubUsers
-    ) cfg.userMap)
-  );
 in
 {
   options.services.charon-key = {
@@ -31,28 +24,39 @@ in
     };
   };
 
-  config = lib.mkIf cfg.enable {
-    # Write the wrapper as a real file (not a Nix store symlink) because sshd
-    # requires AuthorizedKeysCommand and all parent directories to be owned by
-    # root and not group/other-writable.  /nix/store is drwxrwxr-t root nixbld
-    # (group-writable), so any binary there fails sshd's auth_secure_path
-    # check with "Unsafe AuthorizedKeysCommand".
-    system.activationScripts.charon-key-wrapper = lib.stringAfter [ "etc" ] ''
-      mkdir -p /etc/ssh
-      cat > /etc/ssh/charon-key-wrapper << 'EOF'
+  config = lib.mkIf cfg.enable (
+    let
+      charon-key = self.packages.${pkgs.system}.default;
+
+      userMapStr = lib.concatStringsSep "," (
+        lib.concatLists (lib.mapAttrsToList (sshUser: githubUsers:
+          map (ghUser: "${sshUser}:${ghUser}") githubUsers
+        ) cfg.userMap)
+      );
+    in
+    {
+      # Write the wrapper as a real file (not a Nix store symlink) because sshd
+      # requires AuthorizedKeysCommand and all parent directories to be owned by
+      # root and not group/other-writable.  /nix/store is drwxrwxr-t root nixbld
+      # (group-writable), so any binary there fails sshd's auth_secure_path
+      # check with "Unsafe AuthorizedKeysCommand".
+      system.activationScripts.charon-key-wrapper = lib.stringAfter [ "etc" ] ''
+        mkdir -p /etc/ssh
+        cat > /etc/ssh/charon-key-wrapper << 'EOF'
 #!/bin/sh
 exec ${charon-key}/bin/charon-key --user-map ${lib.escapeShellArg userMapStr} "$@"
 EOF
-      chmod 0755 /etc/ssh/charon-key-wrapper
-    '';
+        chmod 0755 /etc/ssh/charon-key-wrapper
+      '';
 
-    # %u is required because charon-key expects the SSH username as a
-    # positional argument (flag.Args()[0]).  When AuthorizedKeysCommand has
-    # its own arguments (like --user-map), sshd does NOT auto-append the
-    # username — %u must be explicit.
-    services.openssh.extraConfig = ''
-      AuthorizedKeysCommand /etc/ssh/charon-key-wrapper %u
-      AuthorizedKeysCommandUser root
-    '';
-  };
+      # %u is required because charon-key expects the SSH username as a
+      # positional argument (flag.Args()[0]).  When AuthorizedKeysCommand has
+      # its own arguments (like --user-map), sshd does NOT auto-append the
+      # username — %u must be explicit.
+      services.openssh.extraConfig = ''
+        AuthorizedKeysCommand /etc/ssh/charon-key-wrapper %u
+        AuthorizedKeysCommandUser root
+      '';
+    }
+  );
 }
