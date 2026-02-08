@@ -13,9 +13,11 @@
           inherit system;
         };
 
+        pkgVersion = "1.0.3";
+
         charon-key = pkgs.buildGoModule {
           pname = "charon-key";
-          version = "1.0.2";
+          version = pkgVersion;
           # Use self to include all git-tracked files
           src = self;
 
@@ -28,7 +30,7 @@
 
           # Build flags for version information
           ldflags = [
-            "-X main.version=1.0.2"
+            "-X main.version=${pkgVersion}"
             "-X main.commit=${self.rev or "unknown"}"
             "-X main.date=${self.lastModifiedDate or "unknown"}"
           ];
