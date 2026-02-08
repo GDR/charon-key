@@ -15,25 +15,33 @@
 
         pkgVersion = "1.0.3";
 
-        charon-key = pkgs.buildGoModule {
+        # Pre-built binaries from GitHub releases.
+        # To update: bump pkgVersion and replace the hashes from checksums.txt
+        # (convert with: nix-hash --type sha256 --to-sri <hex>)
+        assets = {
+          x86_64-linux   = { name = "charon-key-linux-amd64";  hash = "sha256-PULQBszqwWVeIxOlhFnrx+4m6dQo5bBJ8Q0kDNVe0Bc="; };
+          aarch64-linux  = { name = "charon-key-linux-arm64";  hash = "sha256-RfATM4oclHgy5D7VHdHFpOl4CM4hzevZqWhoAzsMp+E="; };
+          x86_64-darwin  = { name = "charon-key-darwin-amd64"; hash = "sha256-H3W2Qd2kI387Qe/5rExVbHxGZy1s7fUIpfBtM57li18="; };
+          aarch64-darwin = { name = "charon-key-darwin-arm64"; hash = "sha256-eR29xLewSuQkuZ88DIwlwgwUZWZ3zPSGggJxaH8Koy4="; };
+        };
+        asset = assets.${system} or (throw "charon-key: unsupported system ${system}");
+
+        charon-key = pkgs.stdenv.mkDerivation {
           pname = "charon-key";
           version = pkgVersion;
-          # Use self to include all git-tracked files
-          src = self;
 
-          # The subpackage to build
-          subPackages = [ "cmd/charon-key" ];
+          src = pkgs.fetchurl {
+            url = "https://github.com/GDR/charon-key/releases/download/v${pkgVersion}/${asset.name}";
+            hash = asset.hash;
+          };
 
-          # No dependencies yet, so vendorHash is null
-          # When dependencies are added, this will be automatically calculated
-          vendorHash = null;
+          dontUnpack = true;
 
-          # Build flags for version information
-          ldflags = [
-            "-X main.version=${pkgVersion}"
-            "-X main.commit=${self.rev or "unknown"}"
-            "-X main.date=${self.lastModifiedDate or "unknown"}"
-          ];
+          installPhase = ''
+            mkdir -p $out/bin
+            cp $src $out/bin/charon-key
+            chmod +x $out/bin/charon-key
+          '';
 
           meta = with pkgs.lib; {
             description = "SSH AuthorizedKeysCommand that fetches SSH public keys from GitHub";
