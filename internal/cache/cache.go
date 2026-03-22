@@ -5,8 +5,27 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 )
+
+const (
+	// defaultCacheDirLinux is the preferred persistent cache dir on Linux.
+	defaultCacheDirLinux = "/var/cache/charon-key"
+	// defaultCacheDirDarwin is the preferred persistent cache dir on macOS.
+	defaultCacheDirDarwin = "/Library/Caches/charon-key"
+)
+
+// DefaultCacheDir returns the preferred persistent cache directory for the
+// current OS. Both locations survive reboots and system temp cleanups.
+func DefaultCacheDir() string {
+	switch runtime.GOOS {
+	case "darwin":
+		return defaultCacheDirDarwin
+	default: // linux and others
+		return defaultCacheDirLinux
+	}
+}
 
 // CacheEntry represents a cached entry for a GitHub user's keys
 type CacheEntry struct {
@@ -28,15 +47,13 @@ type Manager struct {
 
 // NewManager creates a new cache manager
 func NewManager(cacheDir string, ttl time.Duration) (*Manager, error) {
-	// If cacheDir is empty, use OS temp directory
+	// If cacheDir is empty, resolve a suitable persistent default
 	if cacheDir == "" {
 		var err error
-		cacheDir, err = getTempDir()
+		cacheDir, err = resolveDefaultCacheDir()
 		if err != nil {
-			return nil, fmt.Errorf("failed to get temp directory: %w", err)
+			return nil, fmt.Errorf("failed to resolve cache directory: %w", err)
 		}
-		// Create charon-key subdirectory in temp
-		cacheDir = filepath.Join(cacheDir, "charon-key")
 	}
 
 	// Ensure cache directory exists
@@ -50,13 +67,24 @@ func NewManager(cacheDir string, ttl time.Duration) (*Manager, error) {
 	}, nil
 }
 
-// getTempDir returns the OS temp directory (cross-platform)
-func getTempDir() (string, error) {
+// resolveDefaultCacheDir returns the best available cache directory.
+// Priority:
+//  1. Platform-specific persistent dir (e.g. /var/cache on Linux, /Library/Caches on macOS)
+//  2. OS temp dir — fallback for unprivileged / non-standard environments
+func resolveDefaultCacheDir() (string, error) {
+	persistentDir := DefaultCacheDir()
+
+	// Try the persistent system cache dir first
+	if err := os.MkdirAll(persistentDir, 0755); err == nil {
+		return persistentDir, nil
+	}
+
+	// Fall back to OS temp (volatile, but better than nothing)
 	tempDir := os.TempDir()
 	if tempDir == "" {
-		return "", fmt.Errorf("temp directory not available")
+		return "", fmt.Errorf("no usable cache directory found (tried %s and OS temp)", persistentDir)
 	}
-	return tempDir, nil
+	return filepath.Join(tempDir, "charon-key"), nil
 }
 
 // getCacheFilePath returns the cache file path for a GitHub username
@@ -201,4 +229,3 @@ func (m *Manager) Clear(githubUser string) error {
 
 	return nil
 }
-

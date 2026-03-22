@@ -284,27 +284,28 @@ func TestManager_MultipleUsers(t *testing.T) {
 	}
 }
 
-func TestGetTempDir(t *testing.T) {
-	tempDir, err := getTempDir()
+func TestResolveDefaultCacheDir(t *testing.T) {
+	cacheDir, err := resolveDefaultCacheDir()
 	if err != nil {
-		t.Fatalf("getTempDir() error = %v", err)
+		t.Fatalf("resolveDefaultCacheDir() error = %v", err)
 	}
-	if tempDir == "" {
-		t.Error("getTempDir() returned empty string")
+	if cacheDir == "" {
+		t.Error("resolveDefaultCacheDir() returned empty string")
 	}
 
-	// Verify it's a valid directory
-	info, err := os.Stat(tempDir)
-	if err != nil {
-		t.Fatalf("os.Stat(%q) error = %v", tempDir, err)
+	// Should contain "charon-key" in the path
+	if filepath.Base(cacheDir) != "charon-key" {
+		t.Errorf("resolveDefaultCacheDir() = %q, expected base to be 'charon-key'", cacheDir)
 	}
-	if !info.IsDir() {
-		t.Errorf("getTempDir() returned %q which is not a directory", tempDir)
+
+	// Cleanup only if it's not the persistent system dir (don't remove /var/cache/charon-key in tests)
+	if cacheDir != DefaultCacheDir() {
+		defer os.RemoveAll(cacheDir)
 	}
 }
 
 func TestManager_EmptyCacheDir(t *testing.T) {
-	// Test that empty cacheDir uses temp directory
+	// Test that empty cacheDir resolves to a persistent or temp fallback
 	manager, err := NewManager("", 5*time.Minute)
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
@@ -315,15 +316,13 @@ func TestManager_EmptyCacheDir(t *testing.T) {
 		t.Error("GetCacheDir() returned empty string")
 	}
 
-	// Should contain "charon-key" in the path
-	baseName := filepath.Base(cacheDir)
-	parent := filepath.Dir(cacheDir)
-	parentBase := filepath.Base(parent)
-	if baseName != "charon-key" && parentBase != "charon-key" {
-		t.Errorf("GetCacheDir() = %q, expected to contain 'charon-key' in path", cacheDir)
+	// Should always end in "charon-key"
+	if filepath.Base(cacheDir) != "charon-key" {
+		t.Errorf("GetCacheDir() = %q, expected base dir to be 'charon-key'", cacheDir)
 	}
 
-	// Cleanup
-	defer os.RemoveAll(cacheDir)
+	// Cleanup only if it's not the system persistent dir
+	if cacheDir != DefaultCacheDir() {
+		defer os.RemoveAll(cacheDir)
+	}
 }
-
